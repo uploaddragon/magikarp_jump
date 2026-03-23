@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Magikarp Jump: Ultimate Master</title>
+    <style>
+        @font-face { font-family: 'NeoDunggeunmo'; src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2001@1.1/NeoDunggeunmo.woff') format('woff'); }
+        body { 
+            text-align: center; color: white; font-family: 'NeoDunggeunmo', cursive; 
+            height: 100vh; margin: 0; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center;
+            background: #74b9ff url('https://wallpaperaccess.com/full/5111162.png') no-repeat center center; background-size: cover; user-select: none;
+        }
+        body::before { content: ""; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.3); z-index: 1; }
+        
+        /* UI 레이아웃 */
+        .stats { position: absolute; top: 20px; left: 20px; text-align: left; background: rgba(0,0,0,0.7); padding: 15px; border-radius: 12px; z-index: 20; border: 2px solid #fff; }
+        .upgrade-menu { position: absolute; top: 20px; right: 20px; text-align: right; background: rgba(0,0,0,0.7); padding: 15px; border-radius: 12px; z-index: 20; border: 2px solid #ffd700; width: 250px; }
+        .audio-controls { position: absolute; bottom: 20px; left: 20px; background: rgba(0,0,0,0.8); padding: 12px; border-radius: 12px; border: 2px solid #fff; z-index: 30; text-align: left; font-size: 0.8em; }
+        .skin-menu { position: absolute; bottom: 20px; right: 20px; background: rgba(0,0,0,0.8); padding: 15px; border-radius: 20px; display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; max-width: 400px; z-index: 20; border: 2px solid #fff; }
+        #ranking-modal { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 320px; background: rgba(0,0,0,0.95); border: 3px solid #ffd700; border-radius: 15px; padding: 20px; z-index: 100; color: white; }
+        
+        /* 게임 요소 */
+        #magikarp-container { position: relative; height: 300px; width: 100%; display: flex; align-items: center; justify-content: center; z-index: 10; }
+        #magikarp { width: 150px; cursor: pointer; transition: transform 0.05s; z-index: 10; position: relative; }
+        .dynamax { transform: scale(2.5) !important; filter: drop-shadow(0 0 20px #ff006e) !important; }
+        .jump { animation: jump-ani 0.1s ease-out; } 
+        @keyframes jump-ani { 0% { transform: translateY(0); } 50% { transform: translateY(-100px); } 100% { transform: translateY(0); } }
+        
+        /* 보조 잉어킹 - 중앙 기준 배치를 위해 transform 추가 */
+        .helper-karp { position: absolute; width: 80px; pointer-events: none; z-index: 5; transform: translate(-50%, -50%); }
+        .bonus-text { position: absolute; color: #ffeaa7; font-size: 1.5rem; font-weight: bold; text-shadow: 2px 2px 0 #000; animation: fade-up 0.8s ease-out forwards; pointer-events: none; z-index: 100; }
+        @keyframes fade-up { 0% { transform: translateY(0); opacity: 1; } 100% { transform: translateY(-80px); opacity: 0; } }
+        
+        .btn { padding: 8px 12px; border: 2px solid #ccc; border-radius: 10px; cursor: pointer; background: #333; color: #ccc; font-family: 'NeoDunggeunmo'; margin-top: 5px; width: 100%; }
+        .skin-btn.locked { opacity: 0.4; cursor: not-allowed; }
+        .skin-btn.active { border-color: #ffd700; color: #fff; box-shadow: 0 0 10px #ffd700; }
+    </style>
+</head>
+<body>
+
+    <div class="stats">
+        <div id="user-display" style="color: #ffeaa7;">플레이어: 로딩 중...</div>
+        <div style="font-size: 1.2em; color: #55efc4;">보유 클릭: <span id="current-clicks">0</span></div>
+        <div style="font-size: 1.0em; opacity: 0.8;">누적 클릭: <span id="total-clicks">0</span></div>
+        <div id="plate-info" style="font-size: 0.8em; color: #fab1a0; margin-top: 5px;">플레이트: <span id="plate-count">0</span> / 18</div>
+    </div>
+
+    <div class="upgrade-menu">
+        <button class="btn" style="background:#e74c3c; color:white;" onclick="toggleRanking()">🏆 실시간 랭킹</button>
+        <div style="font-size: 0.7em; margin-top: 10px;">💪 근력 (확률: <span id="prob1">0</span>%) [Lv.<span id="lv1">0</span>]</div>
+        <button id="up1" class="btn" style="background:#f1c40f; color:#000;" onclick="upgrade('strength')">강화 (100)</button>
+        <div style="font-size: 0.7em; margin-top: 10px;">🌊 도움 (피버 1%) [Lv.<span id="lv2">0</span>]</div>
+        <button id="up2" class="btn" style="background:#f1c40f; color:#000;" onclick="upgrade('help')">강화 (1,000)</button>
+    </div>
+
+    <div id="ranking-modal">
+        <h2 style="color: #ffd700;">TOP 10 RANKING</h2>
+        <div id="rank-list">불러오는 중...</div>
+        <button class="btn" onclick="toggleRanking()">닫기</button>
+    </div>
+
+    <div id="magikarp-container">
+        <h1 id="fever-title" style="position:absolute; top:-60px; width:100%;">🐟 Magikarp Jump 🐟</h1>
+        <img id="magikarp" src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/129.png" onclick="handleJump()">
+    </div>
+
+    <div class="audio-controls">
+        <label>🎵 BGM</label><br>
+        <input type="range" id="bgm-vol" min="0" max="1" step="0.1" value="0.1" onchange="updateVolume()"><br>
+        <label>🔊 SFX</label><br>
+        <input type="range" id="sfx-vol" min="0" max="1" step="0.1" value="0.2">
+    </div>
+
+    <div class="skin-menu" id="skin-list"></div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getDatabase, ref, set, onValue, query, orderByChild, limitToLast } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+        const firebaseConfig = {
+            apiKey: "AlzaSyCtb-V7B8rPALMb5EhrjFPNs8JFjcRt4K4",
+            authDomain: "magikarp-7c75e.firebaseapp.com",
+            databaseURL: "https://magikarp-7c75e-default-rtdb.firebaseio.com",
+            projectId: "magikarp-7c75e",
+            storageBucket: "magikarp-7c75e.firebasestorage.app",
+            messagingSenderId: "660887418502",
+            appId: "1:660887418502:web:95266935982f7c58470307",
+            measurementId: "G-8BE2C4XZVJ"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+
+        window.saveToCloud = (name, score) => { if(name) set(ref(db, 'rankings/' + name), { username: name, score: score }); };
+        const rankRef = query(ref(db, 'rankings'), orderByChild('score'), limitToLast(10));
+        onValue(rankRef, (snapshot) => {
+            const data = snapshot.val();
+            if(!data) return;
+            const sorted = Object.values(data).sort((a,b) => b.score - a.score);
+            document.getElementById('rank-list').innerHTML = sorted.map((u, i) => `<div style="display:flex; justify-content:space-between; border-bottom:1px solid #444"><span>${i+1}. ${u.username}</span><span>${u.score.toLocaleString()}</span></div>`).join('');
+        });
+    </script>
+
+    <script>
+        const helpCosts = [1000, 10000, 100000, 1000000, 10000000];
+        const skinInfo = {
+            normal: { name: "잉어킹", id: 129, url: "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/129.png" },
+            shiny: { name: "황금 잉어킹", id: 129, url: "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/shiny/129.png" },
+            gyarados: { name: "갸라도스", id: 130, url: "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/130.png" },
+            redGyarados: { name: "빨간 갸라도스", id: 130, url: "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/shiny/130.png" },
+            ditto: { name: "메타몽", id: 132, url: "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/132.png" },
+            dynamax: { name: "다이맥스 잉어킹", id: 129, url: "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/129.png" },
+            arceus: { name: "아르세우스", id: 493, url: "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/493.png" }
+        };
+
+        let state = JSON.parse(localStorage.getItem('magikarpData')) || {
+            userName: "", currentClicks: 0, totalClicks: 0, lvStrength: 0, costStrength: 100, lvHelp: 0, 
+            currentSkin: 'normal', plates: 0, unlockedSkins: ['normal']
+        };
+
+        if(!state.userName) state.userName = prompt("닉네임을 입력하세요!", "익명") || "익명";
+
+        const bgm = new Audio('https://vgmsite.com/soundtracks/pokemon-emerald-original-sound-track/zntjzyrjle/1-25-surf.mp3');
+        bgm.loop = true;
+        let bgmStarted = false;
+        let isFever = false;
+        let isSpacePressed = false;
+
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                e.preventDefault();
+                if (!isSpacePressed) { isSpacePressed = true; handleJump(); }
+            }
+        });
+        window.addEventListener('keyup', (e) => { if (e.code === 'Space') isSpacePressed = false; });
+
+        function updateVolume() { bgm.volume = document.getElementById('bgm-vol').value; }
+        function playCry(id) { 
+            const cry = new Audio(`https://raw.githubusercontent.com/PokeAPI/cries/main/cries/pokemon/latest/${id}.ogg`);
+            cry.volume = document.getElementById('sfx-vol').value;
+            cry.play().catch(()=>{});
+        }
+
+        function handleJump() {
+            if(!bgmStarted) { bgm.play(); bgmStarted = true; updateVolume(); }
+            
+            if(Math.random() < 1/4096 && !state.unlockedSkins.includes('shiny')) {
+                state.unlockedSkins.push('shiny'); alert("✨ 이스터에그! 황금 잉어킹 발견!");
+            }
+
+            let add = 1;
+            if(Math.random() * 100 < state.lvStrength) { add += 1; showBonusText("추가 클릭!"); }
+
+            if(isFever) {
+                add += (state.lvHelp + 1);
+                document.querySelectorAll('.helper-karp, #magikarp').forEach(el => {
+                    el.classList.remove('jump'); void el.offsetWidth; el.classList.add('jump');
+                });
+            } else {
+                const mk = document.getElementById('magikarp');
+                mk.classList.remove('jump'); void mk.offsetWidth; mk.classList.add('jump');
+                if(state.lvHelp > 0 && Math.random() * 100 < 1) startFever();
+            }
+
+            state.currentClicks += add; state.totalClicks += add;
+            checkUnlocks();
+            if(state.totalClicks % 10 === 0) window.saveToCloud(state.userName, state.totalClicks);
+            playCry(skinInfo[state.currentSkin].id);
+            save();
+        }
+
+        function checkUnlocks() {
+            if(state.totalClicks >= 1000 && !state.unlockedSkins.includes('gyarados')) state.unlockedSkins.push('gyarados');
+            if(state.totalClicks >= 5000 && !state.unlockedSkins.includes('ditto')) state.unlockedSkins.push('ditto');
+            if(state.totalClicks >= 100000 && !state.unlockedSkins.includes('dynamax')) state.unlockedSkins.push('dynamax');
+            let p = Math.floor(state.totalClicks / 10000);
+            if(p > state.plates && state.plates < 18) {
+                state.plates = p > 18 ? 18 : p;
+                if(state.plates === 18 && !state.unlockedSkins.includes('arceus')) state.unlockedSkins.push('arceus');
+            }
+        }
+
+        function startFever() {
+            isFever = true; 
+            document.getElementById('fever-title').innerText = "🔥 FEVER TIME 🔥";
+            const container = document.getElementById('magikarp-container');
+            const helpers = [];
+            const helperCount = state.lvHelp + 1;
+            
+            for(let i=0; i < helperCount; i++) {
+                const img = document.createElement('img'); 
+                img.src = skinInfo.normal.url; 
+                img.className = 'helper-karp';
+                
+                // 💡 겹침 방지 로직: 가로 간격 100px 유지 + 위아래 지그재그 배치
+                const xOffset = (i - (helperCount - 1) / 2) * 100;
+                const yOffset = (i % 2 === 0) ? 50 : -50; 
+
+                img.style.left = `calc(50% + ${xOffset}px)`; 
+                img.style.top = `calc(50% + ${yOffset}px)`;
+                
+                container.appendChild(img); 
+                helpers.push(img);
+            }
+            setTimeout(() => { 
+                isFever = false; 
+                document.getElementById('fever-title').innerText = "🐟 Magikarp Jump 🐟"; 
+                helpers.forEach(h => h.remove()); 
+            }, 5000);
+        }
+
+        function upgrade(type) {
+            if(type === 'strength' && state.currentClicks >= state.costStrength && state.lvStrength < 15) {
+                state.currentClicks -= state.costStrength; state.lvStrength++; state.costStrength *= 2;
+            } else if(type === 'help' && state.lvHelp < 5 && state.currentClicks >= helpCosts[state.lvHelp]) {
+                state.currentClicks -= helpCosts[state.lvHelp]; state.lvHelp++;
+                if(state.lvHelp === 5 && !state.unlockedSkins.includes('redGyarados')) state.unlockedSkins.push('redGyarados');
+            }
+            save();
+        }
+
+        function showBonusText(t) {
+            const el = document.createElement('div'); el.className = 'bonus-text'; el.innerText = t;
+            el.style.left = `calc(50% + ${Math.random()*40-20}px)`; el.style.top = '40%';
+            document.body.appendChild(el); setTimeout(() => el.remove(), 800);
+        }
+
+        function save() { localStorage.setItem('magikarpData', JSON.stringify(state)); updateUI(); }
+        function toggleRanking() { const m = document.getElementById('ranking-modal'); m.style.display = m.style.display==='block'?'none':'block'; }
+
+        function updateUI() {
+            document.getElementById('user-display').innerText = `플레이어: ${state.userName}`;
+            document.getElementById('current-clicks').innerText = Math.floor(state.currentClicks).toLocaleString();
+            document.getElementById('total-clicks').innerText = Math.floor(state.totalClicks).toLocaleString();
+            document.getElementById('plate-count').innerText = state.plates;
+            document.getElementById('lv1').innerText = state.lvStrength;
+            document.getElementById('prob1').innerText = state.lvStrength;
+            document.getElementById('up1').innerText = state.lvStrength >= 15 ? "MAX" : `강화 (${state.costStrength.toLocaleString()})`;
+            document.getElementById('lv2').innerText = state.lvHelp;
+            document.getElementById('up2').innerText = state.lvHelp >= 5 ? "MAX" : `강화 (${(helpCosts[state.lvHelp]||0).toLocaleString()})`;
+
+            const menu = document.getElementById('skin-list'); menu.innerHTML = '';
+            Object.keys(skinInfo).forEach(key => {
+                const s = skinInfo[key];
+                const isUnlocked = state.unlockedSkins.includes(key);
+                const btn = document.createElement('button');
+                btn.style.width = "85px"; btn.style.fontSize = "0.7em";
+                btn.className = `btn skin-btn ${isUnlocked?'':'locked'} ${state.currentSkin===key?'active':''}`;
+                btn.innerText = isUnlocked ? s.name : "???";
+                btn.onclick = () => { if(isUnlocked) { state.currentSkin = key; save(); } };
+                menu.appendChild(btn);
+            });
+            const mainImg = document.getElementById('magikarp');
+            mainImg.src = skinInfo[state.currentSkin].url;
+            if(state.currentSkin === 'dynamax') mainImg.classList.add('dynamax');
+            else mainImg.classList.remove('dynamax');
+        }
+        updateUI();
+    </script>
+</body>
+</html>
